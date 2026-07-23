@@ -3,16 +3,18 @@ import { scoreAccount } from "./score.js";
 
 function fakeClient(result: unknown) {
   return {
-    messages: {
-      create: vi.fn(async () => ({
-        content: [{ type: "tool_use", name: "emit_score", input: result }],
-      })),
+    chat: {
+      completions: {
+        create: vi.fn(async () => ({
+          choices: [{ message: { content: JSON.stringify(result) } }],
+        })),
+      },
     },
   } as never;
 }
 
 describe("scoreAccount", () => {
-  it("returns the structured tool output", async () => {
+  it("returns the structured JSON schema output", async () => {
     const client = fakeClient({
       score: 82, tier: "A",
       reasoning: ["Series B budget signal", "RevOps hire = tooling gap"],
@@ -24,8 +26,16 @@ describe("scoreAccount", () => {
     expect(out.reasoning).toHaveLength(2);
   });
 
-  it("throws if the model did not call the tool", async () => {
-    const client = { messages: { create: vi.fn(async () => ({ content: [{ type: "text", text: "no" }] })) } } as never;
-    await expect(scoreAccount(client, "icp", { techStack: [] }, "s")).rejects.toThrow(/tool/i);
+  it("throws if the model refused or returned no content", async () => {
+    const client = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: null, refusal: "cannot" } }],
+          })),
+        },
+      },
+    } as never;
+    await expect(scoreAccount(client, "icp", { techStack: [] }, "s")).rejects.toThrow();
   });
 });

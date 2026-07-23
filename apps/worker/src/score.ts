@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import {
   prisma, config,
   type ScoreResult, type EnrichedAccountData,
@@ -7,19 +7,18 @@ import {
 export const DEFAULT_ICP =
   "B2B SaaS company, 50–500 employees, uses Salesforce, raised Series A or later.";
 
-export const SCORE_TOOL = {
-  name: "emit_score",
-  description: "Emit the qualification score for the account.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      score: { type: "number", description: "0-100 fit score" },
-      tier: { type: "string", enum: ["A", "B", "C", "disqualified"] },
-      reasoning: { type: "array", items: { type: "string" }, minItems: 1 },
-      confidence: { type: "string", enum: ["high", "medium", "low"] },
-    },
-    required: ["score", "tier", "reasoning", "confidence"],
+// OpenAI strict Structured Outputs schema. Note: strict mode does not support
+// validation keywords like `minItems`/`minimum`, so they are intentionally omitted.
+export const SCORE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    score: { type: "number", description: "0-100 fit score" },
+    tier: { type: "string", enum: ["A", "B", "C", "disqualified"] },
+    reasoning: { type: "array", items: { type: "string" } },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
   },
+  required: ["score", "tier", "reasoning", "confidence"],
+  additionalProperties: false,
 };
 
 export function buildScoringPrompt(
@@ -35,25 +34,33 @@ export function buildScoringPrompt(
 }
 
 export async function scoreAccount(
-  client: Anthropic, icp: string,
+  client: OpenAI, icp: string,
   enriched: Partial<EnrichedAccountData>, summary: string,
 ): Promise<ScoreResult> {
-  const res = await client.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1024,
-    tools: [SCORE_TOOL],
-    tool_choice: { type: "tool", name: "emit_score" },
-    messages: [{ role: "user", content: buildScoringPrompt(icp, enriched, summary) }],
+  const res = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a B2B lead qualification analyst. Score the account against the ICP and give concrete, evidence-based reasoning a sales rep can trust.",
+      },
+      { role: "user", content: buildScoringPrompt(icp, enriched, summary) },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "emit_score", strict: true, schema: SCORE_SCHEMA },
+    },
   });
-  const block = res.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use") {
-    throw new Error("Model did not call the emit_score tool");
+  const message = res.choices[0]?.message;
+  if (!message || message.refusal || !message.content) {
+    throw new Error("Model refused or returned no structured score content");
   }
-  return block.input as ScoreResult;
+  return JSON.parse(message.content) as ScoreResult;
 }
 
 export async function scoreHandler(leadId: string): Promise<void> {
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const client = new OpenAI({ apiKey: config.openaiApiKey });
   const enriched = await prisma.enrichedAccount.findUnique({ where: { leadId } });
   const research = await prisma.researchFinding.findUnique({ where: { leadId } });
   const result = await scoreAccount(
