@@ -1,1 +1,1 @@
-export const SIGNAL_SHARED = "ok";
+export * from "./db.js";
