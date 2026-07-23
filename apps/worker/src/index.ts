@@ -1,9 +1,10 @@
 import { runStage } from "./runner.js";
+import { enrichHandler } from "./enrich.js";
 
 const noop = async (_leadId: string) => {};
 
 const workers = [
-  runStage("enrich", noop),
+  runStage("enrich", enrichHandler),
   runStage("research", noop),
   runStage("score", noop),
   runStage("embed", noop),
