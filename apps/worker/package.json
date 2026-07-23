@@ -1,0 +1,16 @@
+{
+  "name": "@signal/worker",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "start": "dotenv -e ../../.env -- tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@signal/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.27.0",
+    "openai": "^4.56.0",
+    "bullmq": "^5.12.0"
+  }
+}

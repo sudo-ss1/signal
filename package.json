@@ -1,0 +1,22 @@
+{
+  "name": "signal",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @signal/shared exec prisma migrate dev",
+    "db:generate": "pnpm --filter @signal/shared exec prisma generate",
+    "seed": "dotenv -e .env -- tsx scripts/seed-closed-won.ts"
+  },
+  "devDependencies": {
+    "@signal/shared": "workspace:*",
+    "@types/node": "^20.14.0",
+    "dotenv-cli": "^7.4.0",
+    "openai": "^4.56.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

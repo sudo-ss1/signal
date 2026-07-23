@@ -1,0 +1,105 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum LeadStatus {
+  queued
+  enriching
+  researching
+  scoring
+  matching
+  routing
+  done
+  dead_letter
+}
+
+model Lead {
+  id          String     @id @default(uuid())
+  domain      String
+  companyName String?    @map("company_name")
+  source      String
+  signalType  String?    @map("signal_type")
+  signalPayload Json?    @map("signal_payload")
+  status      LeadStatus @default(queued)
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  enriched  EnrichedAccount?
+  research  ResearchFinding?
+  score     Score?
+  embedding Embedding?
+  routing   RoutingEvent[]
+
+  @@map("leads")
+}
+
+model EnrichedAccount {
+  leadId        String  @id @map("lead_id")
+  lead          Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  employeeCount Int?    @map("employee_count")
+  industry      String?
+  techStack     String[] @map("tech_stack")
+  fundingStage  String? @map("funding_stage")
+  hqLocation    String? @map("hq_location")
+
+  @@map("enriched_accounts")
+}
+
+model ResearchFinding {
+  leadId       String   @id @map("lead_id")
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  summary      String
+  rawFindings  Json     @map("raw_findings")
+  researchedAt DateTime @default(now()) @map("researched_at")
+
+  @@map("research_findings")
+}
+
+model Score {
+  leadId     String   @id @map("lead_id")
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  score      Int
+  tier       String
+  reasoning  Json
+  confidence String
+  scoredAt   DateTime @default(now()) @map("scored_at")
+
+  @@map("scores")
+}
+
+model ClosedWonAccount {
+  id            String @id @default(uuid())
+  companyName   String @map("company_name")
+  firmographics Json
+  sourceText    String @map("source_text")
+  // embedding column added via raw SQL migration (Unsupported by Prisma)
+  embedding     Unsupported("vector(1536)")?
+
+  @@map("closed_won_accounts")
+}
+
+model Embedding {
+  leadId     String @id @map("lead_id")
+  lead       Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sourceText String @map("source_text")
+  embedding  Unsupported("vector(1536)")?
+
+  @@map("embeddings")
+}
+
+model RoutingEvent {
+  id        String   @id @default(uuid())
+  leadId    String   @map("lead_id")
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  action    String
+  payload   Json
+  timestamp DateTime @default(now())
+
+  @@map("routing_events")
+}
