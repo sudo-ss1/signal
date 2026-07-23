@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { ingestRoutes } from "./routes/ingest.js";
+import { leadsRoutes } from "./routes/leads.js";
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: !process.env.VITEST });
@@ -8,5 +9,6 @@ export async function buildServer(): Promise<FastifyInstance> {
   );
   app.get("/health", async () => ({ ok: true }));
   await app.register(ingestRoutes);
+  await app.register(leadsRoutes);
   return app;
 }
