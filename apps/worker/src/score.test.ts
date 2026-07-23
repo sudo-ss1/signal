@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { scoreAccount } from "./score.js";
+import { scoreAccount, clampScore } from "./score.js";
 
 function fakeClient(result: unknown) {
   return {
@@ -37,5 +37,23 @@ describe("scoreAccount", () => {
       },
     } as never;
     await expect(scoreAccount(client, "icp", { techStack: [] }, "s")).rejects.toThrow();
+  });
+});
+
+describe("clampScore", () => {
+  it("rounds half up to an integer", () => {
+    expect(clampScore(87.5)).toBe(88);
+  });
+
+  it("rounds down below the half boundary", () => {
+    expect(clampScore(87.4)).toBe(87);
+  });
+
+  it("clamps values above 100 to 100", () => {
+    expect(clampScore(120)).toBe(100);
+  });
+
+  it("clamps negative values to 0", () => {
+    expect(clampScore(-5)).toBe(0);
   });
 });

@@ -28,9 +28,16 @@ export function buildScoringPrompt(
     `ICP definition: ${icp}`,
     `Firmographics: ${JSON.stringify(enriched)}`,
     `Research summary: ${summary}`,
-    "Score this account's fit against the ICP. Call emit_score with your decision.",
+    "Score this account's fit against the ICP. Return your decision as JSON matching the required schema.",
     "Reasoning must be concrete, evidence-based bullets a sales rep can trust.",
   ].join("\n\n");
+}
+
+// `scores.score` is a Prisma `Int` column, but the model may return a
+// fractional value. Coerce to a clamped integer at the DB-write boundary so a
+// value like 87.5 cannot throw on upsert and dead-letter the lead.
+export function clampScore(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
 }
 
 export async function scoreAccount(
@@ -70,9 +77,10 @@ export async function scoreHandler(leadId: string): Promise<void> {
     (enriched ?? { techStack: [] }) as Partial<EnrichedAccountData>,
     research?.summary ?? "",
   );
+  const safeScore = clampScore(result.score);
   await prisma.score.upsert({
     where: { leadId },
-    create: { leadId, ...result, reasoning: result.reasoning },
-    update: { ...result, reasoning: result.reasoning },
+    create: { leadId, ...result, score: safeScore },
+    update: { ...result, score: safeScore },
   });
 }
