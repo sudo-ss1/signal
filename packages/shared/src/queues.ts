@@ -12,7 +12,11 @@ export const STAGES = [
 
 export type Stage = (typeof STAGES)[number];
 
-export const connection = { url: config.redisUrl };
+const redisUrl = new URL(config.redisUrl);
+export const connection = {
+  host: redisUrl.hostname,
+  port: Number(redisUrl.port) || 6379,
+};
 
 export const queues: Record<Stage, Queue<LeadJob>> = Object.fromEntries(
   STAGES.map((s) => [
