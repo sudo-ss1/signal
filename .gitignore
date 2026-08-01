@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 *.log
+
+# Working documents — not part of the published repo
+Gtm lead qualification agent spec.md
+docs/superpowers/plans/
