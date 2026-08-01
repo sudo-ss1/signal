@@ -101,6 +101,15 @@ pnpm --filter @signal/worker dev
 pnpm test                 # vitest, all packages
 ```
 
+## Design docs
+
+The architecture was written down before it was built:
+
+- [Lead qualification design](docs/design/2026-07-23-lead-qualification-design.md)
+  — component boundaries, data model, and the phased build plan.
+- [Phase 2 design](docs/design/2026-07-23-phase2-design.md) — real research
+  loop, hardening, and scoring validation.
+
 ## Current seams
 
 These are stubbed on purpose, behind interfaces that the real implementations

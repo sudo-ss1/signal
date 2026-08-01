@@ -3,8 +3,9 @@
 **Make the pipeline real & hardened (Research + Hardening + Scoring validation)**
 Author: Shashank Singh · Date: 2026-07-23 · Status: Approved for planning
 
-Builds on the merged vertical slice (`docs/superpowers/specs/2026-07-23-signal-lead-qualification-design.md`
-and `.../plans/2026-07-23-signal-vertical-slice.md`). This cycle covers pieces
+Builds on the merged vertical slice — see
+[`2026-07-23-lead-qualification-design.md`](./2026-07-23-lead-qualification-design.md).
+This cycle covers pieces
 **A (real research)**, **D (scoring validation)**, and **E (hardening)** from the
 original Phase 2 list. Real enrichment (B) and real HubSpot/Slack routing (C) are
 explicitly deferred to a later cycle.

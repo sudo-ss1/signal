@@ -3,9 +3,9 @@
 **AI-Powered Lead Qualification & Account-Matching Engine**
 Author: Shashank Singh · Date: 2026-07-23 · Status: Approved for planning
 
-Derived from `Gtm lead qualification agent spec.md`. This document records the
-architectural decisions, component boundaries, and phased build plan agreed
-during brainstorming. It is the source of truth for the implementation plan.
+This document records the architectural decisions, component boundaries, and
+phased build plan for Signal. It is the source of truth the implementation
+followed.
 
 ---
 
