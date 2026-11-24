@@ -13,9 +13,18 @@ routing decision ships with the reasoning that produced it.
 > similarity search. Enrichment runs against a seeded mock provider and the
 > research stage emits a deterministic summary rather than doing live web
 > research — both are deliberate seams, documented under
-> [Current seams](#current-seams). From the [Phase 2 design](docs/design/2026-07-23-phase2-design.md),
-> the hardening items (idempotent routing and seed; env parsing and queues in
-> the shared package are lazy, so importing it opens no Redis connection) and the scoring eval harness are done; the real research loop is next.
+> [Current seams](#current-seams). From the
+> [Phase 2 design](docs/design/2026-07-23-phase2-design.md), the hardening
+> items (idempotent routing and seed; env parsing and queues in the shared
+> package are lazy, so importing it opens no Redis connection) and the scoring
+> eval harness are done; the real research loop is next.
+
+## Demo
+
+[**Watch the 44-second demo**](docs/media/signal-demo.mp4) — one real lead run in
+real time, then four leads fired at the same pipeline (replayed at 4×) landing
+four different tiers, each with its stored reasoning. Every command, timing,
+score and quote in it comes from a captured run with `gpt-6-luna`.
 
 ## Pipeline
 
@@ -71,7 +80,8 @@ zod validation (`rawLeadInputSchema` in `packages/shared`) and the same enqueue
 logic — the batch path is not a second implementation that drifts from the
 single-lead one. Invalid input is rejected with a 400 listing what is wrong; in
 a CSV, valid rows are ingested and invalid rows are reported back by line
-number (if no row is valid, the whole request is a 400). The CSV parser handles quoted fields, CRLF, and a UTF-8 BOM.
+number (if no row is valid, the whole request is a 400). The CSV parser
+handles quoted fields, CRLF, and a UTF-8 BOM.
 
 ## Stack
 
@@ -151,6 +161,11 @@ drop into:
 
 ## What's next
 
+- Score more than one lead at a time. Workers run with BullMQ's default
+  concurrency of 1 job per stage, so leads queue behind the scorer: in a
+  captured run of four leads, the last waited ~30 s before scoring started.
+  Setting `concurrency` on the score worker (`apps/worker/src/runner.ts`) is
+  the fix, bounded by the OpenAI rate limit.
 - Real research loop (web search + summarization) replacing the stub
 - Grow the scoring golden set (`scripts/eval-scoring.ts`) beyond 9 synthetic
   accounts, ideally with real labeled leads

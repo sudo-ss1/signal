@@ -5,6 +5,9 @@ research → score → embed → route, then read the full pipeline view back ou
 
 ## Prereqs
 
+Tools: Node 20+, pnpm, Docker, and `jq` (used to read the API's JSON in the
+run steps below).
+
 1. **Populate `.env`** (copy from `.env.example`, then fill in the key):
    ```bash
    cp .env.example .env
