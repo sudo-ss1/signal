@@ -5,13 +5,13 @@ research → score → embed → route, then read the full pipeline view back ou
 
 ## Prereqs
 
-1. **Populate `.env`** (copy from `.env.example`, then fill in the two keys):
+1. **Populate `.env`** (copy from `.env.example`, then fill in the key):
    ```bash
    cp .env.example .env
    ```
-   Set real values for:
-   - `ANTHROPIC_API_KEY` — used by the scoring stage.
-   - `OPENAI_API_KEY` — used by the embedding stage and the seed script.
+   Set a real value for `OPENAI_API_KEY` — it is the only external credential,
+   used by the scoring stage, the embedding stage, the seed script, and
+   `pnpm eval`. Optionally set `SCORING_MODEL` (default `gpt-6-luna`).
 
    `DATABASE_URL` and `REDIS_URL` are already set to match `docker-compose.yml`:
    - Postgres (pgvector) on host port **5434**
@@ -24,7 +24,8 @@ research → score → embed → route, then read the full pipeline view back ou
    Wait for both services to report healthy (`docker compose ps`). Postgres
    listens on `localhost:5434`, Redis on `localhost:6380`.
 
-3. **Install, migrate, generate the Prisma client:**
+3. **Install, migrate, generate the Prisma client** (both `db:` scripts load
+   the root `.env`, so nothing needs exporting first):
    ```bash
    pnpm install
    pnpm db:migrate
@@ -36,8 +37,9 @@ research → score → embed → route, then read the full pipeline view back ou
    pnpm seed
    ```
    This runs `scripts/seed-closed-won.ts` with the root `.env` loaded
-   automatically (`dotenv -e .env -- tsx …`) and inserts three embedded
-   closed-won accounts. Expect three `seeded <company>` log lines.
+   automatically (`dotenv -e .env -- tsx …`) and upserts three embedded
+   closed-won accounts, then exits. Expect three `seeded <company>` log lines.
+   Re-running it updates the accounts in place; it never duplicates them.
 
 > Note: the `start`/`dev` scripts for both `@signal/api` and `@signal/worker`
 > load the repo-root `.env` automatically (`dotenv -e ../../.env -- …`), so you
@@ -68,6 +70,21 @@ research → score → embed → route, then read the full pipeline view back ou
    ```
    → returns `{"leadId":"..."}` (HTTP 202). Copy the `leadId`.
 
+   Invalid input is rejected with HTTP 400 and a list of problems, e.g. a
+   missing `source` (`csv` | `webhook`), an unknown `signalType`
+   (`job_posting` | `funding` | `tech_change` | `form_fill`), or a URL instead
+   of a bare domain.
+
+   To ingest a batch instead, POST CSV text with a header row (`domain`
+   required; `companyName`, `signalType` optional). Quoted fields work:
+   ```bash
+   curl -s -XPOST localhost:3001/ingest/csv -H 'content-type: text/csv' \
+     --data-binary $'domain,companyName,signalType\nnorthwind.io,"Northwind, Inc",form_fill\n'
+   ```
+   → `{"leadIds":[...],"errors":[]}`; invalid rows appear in `errors` with
+   their line number. If no row is valid, the response is HTTP 400
+   `{"error":"no valid rows","leadIds":[],"errors":[...]}`.
+
 4. **Watch Terminal A:** you should see the lead flow through each stage,
    ending in a route log line such as `[route] slack_alert {...}`.
 
@@ -79,9 +96,20 @@ research → score → embed → route, then read the full pipeline view back ou
    - `lead.status` is `done`
    - `enriched` — firmographics + tech stack
    - `research` — research summary
-   - `score` — `score`, `tier`, non-empty `reasoning[]`, `confidence`
-   - `routing` — the emitted routing event(s)
+   - `score` — `score`, `tier`, `reasoning[]` (evidence bullets), `confidence`
+   - `routing` — the routing decision (an array holding at most one event;
+     re-routing a lead replaces it). Its payload includes `similarAccount`,
+     the nearest closed-won account and its cosine similarity.
 
 This is the Phase 1 exit criterion: a lead ingested via the API is enriched,
 researched, scored (with a tier and reasoning), matched, routed, and readable
 back through `GET /leads/:id`.
+
+## Optional: scoring eval
+
+```bash
+pnpm eval      # or: pnpm eval 5   (runs per case)
+```
+Scores the golden set in `scripts/eval-scoring.ts` against the live model and
+prints expected vs. actual tier per run, tier agreement, run-to-run stability,
+and the score distribution. Takes a couple of minutes with `gpt-6-luna`.

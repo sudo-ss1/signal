@@ -23,21 +23,31 @@ export async function waterfall(
   return { techStack: [], ...merged } as EnrichedAccountData;
 }
 
-// Seeded mock firmographics keyed by domain; unknown domains get a plausible default.
+// Seeded mock firmographics keyed by domain. Unknown domains return nothing:
+// fabricating the same "plausible default" for every domain made unrelated
+// companies indistinguishable to the scorer. Missing fields are flagged to the
+// scorer instead (see missingFields in score.ts).
 const SEED: Record<string, EnrichedAccountData> = {
   "acme.com": {
     employeeCount: 220, industry: "B2B SaaS",
     techStack: ["Salesforce", "AWS", "Segment"], fundingStage: "Series B",
     hqLocation: "San Francisco, CA",
   },
+  "northwind.io": {
+    employeeCount: 120, industry: "B2B SaaS",
+    techStack: ["HubSpot", "GCP"], fundingStage: "Series A",
+    hqLocation: "Austin, TX",
+  },
+  "brightbakery.com": {
+    employeeCount: 35, industry: "Food & Beverage Retail",
+    techStack: ["Shopify", "Square"], fundingStage: "Bootstrapped",
+    hqLocation: "Portland, OR",
+  },
 };
 
 export const MockProvider: EnrichmentProvider = {
   async enrich(domain) {
-    return SEED[domain] ?? {
-      employeeCount: 80, industry: "Software",
-      techStack: ["AWS"], fundingStage: "Series A", hqLocation: "Remote",
-    };
+    return SEED[domain] ?? {};
   },
 };
 

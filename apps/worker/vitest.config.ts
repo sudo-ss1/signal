@@ -4,9 +4,8 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // The monorepo .env lives at the repo root, but vitest runs from this package
-// and does not walk up to find it. Load it here so importing @signal/shared
-// (which parses REDIS_URL/DATABASE_URL at module load) succeeds without extra
-// dependencies.
+// and does not walk up to find it. Load it here so tests see the same env as
+// the app. @signal/shared parses env lazily, so tests also pass with no .env.
 const rootEnvPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../.env",

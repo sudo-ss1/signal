@@ -34,7 +34,7 @@ model Lead {
   research  ResearchFinding?
   score     Score?
   embedding Embedding?
-  routing   RoutingEvent[]
+  routing   RoutingEvent?
 
   @@map("leads")
 }
@@ -75,10 +75,11 @@ model Score {
 
 model ClosedWonAccount {
   id            String @id @default(uuid())
-  companyName   String @map("company_name")
+  companyName   String @unique @map("company_name")
   firmographics Json
   sourceText    String @map("source_text")
-  // embedding column added via raw SQL migration (Unsupported by Prisma)
+  // vector type is Unsupported in the Prisma client: the column is created by the
+  // migration, but reads/writes go through raw SQL (embed.ts, seed script)
   embedding     Unsupported("vector(1536)")?
 
   @@map("closed_won_accounts")
@@ -93,9 +94,10 @@ model Embedding {
   @@map("embeddings")
 }
 
+// One routing decision per lead: re-running the route stage replaces it.
 model RoutingEvent {
   id        String   @id @default(uuid())
-  leadId    String   @map("lead_id")
+  leadId    String   @unique @map("lead_id")
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   action    String
   payload   Json

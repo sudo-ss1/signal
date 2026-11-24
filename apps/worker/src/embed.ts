@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { prisma, config, type EnrichedAccountData } from "@signal/shared";
+import { prisma, getConfig, type EnrichedAccountData } from "@signal/shared";
 import { embedText, toVectorLiteral } from "./embeddings-client.js";
 
 export interface SimilarMatch {
@@ -37,7 +37,7 @@ export async function findSimilar(vec: number[], limit = 3): Promise<SimilarMatc
 }
 
 export async function embedHandler(leadId: string): Promise<void> {
-  const openai = new OpenAI({ apiKey: config.openaiApiKey });
+  const openai = new OpenAI({ apiKey: getConfig().openaiApiKey });
   const enriched = await prisma.enrichedAccount.findUnique({ where: { leadId } });
   const research = await prisma.researchFinding.findUnique({ where: { leadId } });
   const text = buildEmbedText(

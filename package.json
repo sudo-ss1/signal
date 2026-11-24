@@ -6,9 +6,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "db:migrate": "pnpm --filter @signal/shared exec prisma migrate dev",
-    "db:generate": "pnpm --filter @signal/shared exec prisma generate",
-    "seed": "dotenv -e .env -- tsx scripts/seed-closed-won.ts"
+    "db:migrate": "dotenv -e .env -- pnpm --filter @signal/shared exec prisma migrate dev",
+    "db:generate": "dotenv -e .env -- pnpm --filter @signal/shared exec prisma generate",
+    "seed": "dotenv -e .env -- tsx scripts/seed-closed-won.ts",
+    "eval": "dotenv -e .env -- tsx scripts/eval-scoring.ts"
   },
   "devDependencies": {
     "@signal/shared": "workspace:*",

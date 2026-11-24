@@ -13,8 +13,9 @@ routing decision ships with the reasoning that produced it.
 > similarity search. Enrichment runs against a seeded mock provider and the
 > research stage emits a deterministic summary rather than doing live web
 > research — both are deliberate seams, documented under
-> [Current seams](#current-seams). Phase 2 (real research loop, hardening,
-> scoring eval harness) is designed in `docs/`.
+> [Current seams](#current-seams). From the [Phase 2 design](docs/design/2026-07-23-phase2-design.md),
+> the hardening items (idempotent routing and seed; env parsing and queues in
+> the shared package are lazy, so importing it opens no Redis connection) and the scoring eval harness are done; the real research loop is next.
 
 ## Pipeline
 
@@ -23,15 +24,16 @@ POST /ingest ──▶ enrich ──▶ research ──▶ score ──▶ embed
                    │           │           │         │         │
               firmographic  account    LLM score  pgvector  rules engine
                 waterfall   summary   + reasoning  vs.       (slack / crm /
-                                      + tier       closed-won  hold)
+                                      + tier       closed-won  suppressed)
                                       + confidence
 ```
 
 Each stage is its own BullMQ queue. A lead is a job that advances one stage at
 a time, so a failure is isolated to the stage that caused it and the completed
-work upstream is never recomputed. Stages retry three times with exponential
-backoff; exhausting retries dead-letters the job rather than silently dropping
-the lead or leaving it wedged mid-pipeline.
+work upstream is never recomputed. Each stage gets three attempts with
+exponential backoff (1s, 2s); exhausting them sets the lead's status to
+`dead_letter` and keeps the failed job (with its error) in BullMQ's failed set,
+rather than silently dropping the lead or leaving it wedged mid-pipeline.
 
 ## Why it's built this way
 
@@ -42,24 +44,34 @@ stored justification, not a regenerated one that may no longer match the score
 it's explaining.
 
 **Scoring uses OpenAI strict Structured Outputs**, not prompt-and-parse. The
-model is handed a JSON Schema it must satisfy, so a malformed score is a
-transport-level failure that retries, rather than a parse error discovered
-three stages downstream.
+model (`gpt-6-luna` by default, overridable with `SCORING_MODEL`) is handed a
+JSON Schema it must satisfy, so a malformed score is a transport-level failure
+that retries, rather than a parse error discovered three stages downstream. The
+prompt carries the lead's identity and inbound signal, flags any firmographics
+enrichment could not supply, and requires the reasoning to assess every ICP
+criterion as met, not met, or unknown, with each bullet citing a provided fact
+— unknown never counts as fit.
+`pnpm eval` measures tier agreement and run-to-run stability on a labeled
+golden set.
 
-**Similarity runs against your own closed-won accounts.** Rather than scoring
-fit against an abstract ICP description alone, the embed stage compares each
-lead's embedding to seeded closed-won accounts via pgvector cosine similarity.
-"Looks like the customers you already win" is a stronger signal than "matches
-the ICP paragraph someone wrote last quarter."
+**Similarity runs against your own closed-won accounts.** The embed stage
+stores each lead's embedding, and the route stage finds the nearest seeded
+closed-won account by pgvector cosine similarity and attaches it to the routing
+decision ("looks like Globex, 0.73"), so a rep sees which won customer the lead
+resembles. Similarity is evidence shown alongside the score today; it does not
+yet feed the score or the routing rule.
 
 **Routing is a pure function of tier and confidence.** `decideAction(tier,
 confidence)` is separate from the I/O that acts on it, so the escalation policy
 is unit-testable without a Slack workspace or a CRM sandbox. Tier A at high
-confidence alerts; A or B pushes to CRM; everything else holds.
+confidence alerts; A or B pushes to CRM; everything else is suppressed.
 
 **Ingestion accepts one lead or a CSV**, and both paths converge on the same
-enqueue logic — the batch path is not a second implementation that drifts from
-the single-lead one.
+zod validation (`rawLeadInputSchema` in `packages/shared`) and the same enqueue
+logic — the batch path is not a second implementation that drifts from the
+single-lead one. Invalid input is rejected with a 400 listing what is wrong; in
+a CSV, valid rows are ingested and invalid rows are reported back by line
+number (if no row is valid, the whole request is a 400). The CSV parser handles quoted fields, CRLF, and a UTF-8 BOM.
 
 ## Stack
 
@@ -69,8 +81,8 @@ the single-lead one.
 | API | Fastify + TypeScript |
 | Queue | BullMQ + Redis (per-stage queues, exponential backoff, dead-letter) |
 | Database | PostgreSQL + pgvector, Prisma |
-| LLM | OpenAI strict Structured Outputs (scoring), OpenAI embeddings |
-| Validation | zod |
+| LLM | OpenAI strict Structured Outputs (scoring, `gpt-6-luna`), OpenAI embeddings (`text-embedding-3-small`) |
+| Validation | zod (ingest payloads and env config) |
 | Tests | vitest, per stage |
 | Local infra | docker-compose (Postgres+pgvector, Redis) |
 
@@ -83,7 +95,8 @@ lead or the name of a stage.
 `Lead` → `EnrichedAccount` → `ResearchFinding` → `Score` → `Embedding` →
 `RoutingEvent`, with `ClosedWonAccount` holding the reference set that
 similarity is measured against. Each stage owns exactly one table and upserts
-into it keyed on `leadId`, which is what makes a stage safe to re-run.
+into it keyed on `leadId` (`routing_events` holds one decision per lead, replaced
+on re-route), which is what makes a stage safe to re-run.
 
 ## Running it
 
@@ -94,12 +107,18 @@ then read the whole pipeline back out via `GET /leads/:id`.
 cp .env.example .env      # set OPENAI_API_KEY
 docker compose up -d      # Postgres (pgvector) :5434, Redis :6380
 pnpm install
-pnpm db:migrate && pnpm db:generate
-pnpm seed                 # embed 3 closed-won reference accounts
+pnpm db:migrate && pnpm db:generate   # both load the root .env
+pnpm seed                 # embed 3 closed-won reference accounts (safe to re-run)
 pnpm --filter @signal/api dev
 pnpm --filter @signal/worker dev
 pnpm test                 # vitest, all packages
+pnpm eval                 # live scoring eval on the golden set (uses the API key)
 ```
+
+The unit tests need no Postgres, Redis, or `.env`. The one integration test
+(`packages/shared/src/db.test.ts`) runs whenever `DATABASE_URL` is set — which
+the root `.env` does once you've copied `.env.example` — and then needs the
+docker-compose Postgres up; without `DATABASE_URL` it is skipped.
 
 ## Design docs
 
@@ -116,9 +135,12 @@ These are stubbed on purpose, behind interfaces that the real implementations
 drop into:
 
 - **Enrichment** resolves through a `waterfall(providers, domain)` function
-  currently backed by a single seeded `MockProvider`. Adding Apollo or Clearbit
-  means appending a provider to the array — the merge order and fallback
-  behavior are already the tested part.
+  currently backed by a single seeded `MockProvider` (`acme.com`,
+  `northwind.io`, `brightbakery.com`). Unknown domains get no firmographics —
+  the scorer is told which fields are missing and scores on the lead's identity
+  and signal alone, at low confidence. Adding Apollo or Clearbit means
+  appending a provider to the array — the merge order and fallback behavior
+  are already the tested part.
 - **Research** emits a deterministic summary built from firmographics
   (`rawFindings: { stub: true }` marks it as such in the database). The live
   web-research loop is Phase 2; the stage boundary, retry semantics, and
@@ -130,7 +152,7 @@ drop into:
 ## What's next
 
 - Real research loop (web search + summarization) replacing the stub
-- Scoring eval harness — a labeled set to measure whether prompt changes
-  actually improve agreement, instead of eyeballing a handful of leads
+- Grow the scoring golden set (`scripts/eval-scoring.ts`) beyond 9 synthetic
+  accounts, ideally with real labeled leads
 - Meilisearch for operator-facing account lookup
 - A frontend; the engine currently has no UI beyond the API

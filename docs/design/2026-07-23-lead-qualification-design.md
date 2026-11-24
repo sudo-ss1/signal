@@ -7,6 +7,23 @@ This document records the architectural decisions, component boundaries, and
 phased build plan for Signal. It is the source of truth the implementation
 followed.
 
+> **Implementation status (2026-11-24).** This is the original plan; the code
+> has since diverged in these places — the README describes current behavior:
+> - **LLM:** scoring uses **OpenAI** strict Structured Outputs (`gpt-6-luna`
+>   by default), not Claude tool-use. No Anthropic key or SDK is used.
+>   Research is still a deterministic stub (§4.3); the Phase 2 design moves it
+>   to OpenAI web search, not Claude.
+> - **Not built yet:** the Next.js dashboard (`apps/web`, §4.7), HubSpot and
+>   Slack integrations and their idempotency keys (§4.6 — routing logs and
+>   persists to `routing_events`), research caching, and api/worker/web
+>   services in docker-compose (it runs Postgres and Redis only).
+> - **Smaller differences:** 3 seeded closed-won accounts (not 10–20); the
+>   route payload carries the top-1 similar account (not top-3); the ICP is
+>   the `DEFAULT_ICP` constant in `apps/worker/src/score.ts`, not external
+>   config; enrichment gaps are flagged to the scorer in the prompt
+>   ("Missing firmographics: …"); tier A + high confidence routes to a single
+>   `slack_alert` action rather than both HubSpot and Slack.
+
 ---
 
 ## 1. Purpose & Framing

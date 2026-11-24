@@ -1,8 +1,8 @@
 import { Worker } from "bullmq";
 import {
   prisma,
-  queues,
-  connection,
+  getQueue,
+  getConnection,
   nextStage,
   type Stage,
   type LeadJob,
@@ -32,7 +32,7 @@ export function runStage(
       await handler(leadId);
       const next = nextStage(stage);
       if (next) {
-        await queues[next].add(next, { leadId });
+        await getQueue(next).add(next, { leadId });
       } else {
         await prisma.lead.update({
           where: { id: leadId },
@@ -40,7 +40,7 @@ export function runStage(
         });
       }
     },
-    { connection },
+    { connection: getConnection() },
   );
 
   worker.on("failed", async (job, err) => {

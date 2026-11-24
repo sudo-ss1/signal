@@ -15,8 +15,8 @@ export async function routeHandler(leadId: string): Promise<void> {
 
   const action = decideAction(score.tier as Tier, score.confidence as Confidence);
 
-  // similarity lookup for the payload (best match).
-  // Reuse findSimilar from ./embed.js so the cosine query lives in exactly one place.
+  // Similarity lookup for the payload (best match). The cosine query lives in
+  // findSimilar (./embed.js) so it exists in exactly one place.
   let topMatch: { companyName: string; similarity: number } | null = null;
   const rows = await prisma.$queryRawUnsafe<{ emb: string | null }[]>(
     "SELECT embedding::text AS emb FROM embeddings WHERE lead_id = $1",
@@ -38,8 +38,16 @@ export async function routeHandler(leadId: string): Promise<void> {
     similarAccount: topMatch,
   };
 
-  // slice sink: console. Phase 2 replaces with HubSpot + Slack.
+  // Sink: console + routing_events. Real HubSpot/Slack is deferred to a later
+  // cycle (Phase 2 design, item C).
   console.log(`[route] ${action}`, JSON.stringify(payload));
 
-  await prisma.routingEvent.create({ data: { leadId, action, payload } });
+  // Upsert keyed on leadId: re-running the stage replaces the decision rather
+  // than appending a duplicate event.
+  const timestamp = new Date();
+  await prisma.routingEvent.upsert({
+    where: { leadId },
+    create: { leadId, action, payload, timestamp },
+    update: { action, payload, timestamp },
+  });
 }

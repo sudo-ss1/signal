@@ -10,6 +10,24 @@ This cycle covers pieces
 original Phase 2 list. Real enrichment (B) and real HubSpot/Slack routing (C) are
 explicitly deferred to a later cycle.
 
+> **Implementation status (2026-11-24).**
+> - **Done:** §3.2 idempotent routing (`routing_events.lead_id` unique +
+>   upsert), §3.3 idempotent seed (`closed_won_accounts.company_name` unique +
+>   `ON CONFLICT`; the script now exits), §3.4 lazy env parsing and
+>   queues in `@signal/shared` (`getConfig()`, `getQueue()`, `closeQueues()`;
+>   importing it still constructs an unconnected `PrismaClient`), §3.6
+>   `@anthropic-ai/sdk` removed, §5 `scripts/eval-scoring.ts` / `pnpm eval`
+>   (also reports run-to-run tier stability). Migration
+>   `20261124090000_idempotent_routing_and_seed` collapses pre-existing
+>   duplicates before adding the unique indexes.
+> - **Also changed:** scoring moved to `gpt-6-luna` (configurable via
+>   `SCORING_MODEL`); the prompt now includes the lead's identity and signal
+>   and flags missing firmographics; the mock enrichment provider returns no
+>   data for unknown domains instead of one shared default.
+> - **Open:** §3.1 real research loop + `research_cache` table (the
+>   `RESEARCH_CACHE_DAYS` setting is parsed but not yet used), §3.5 second
+>   mock enrichment source.
+
 ---
 
 ## 1. Purpose

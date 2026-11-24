@@ -8,10 +8,9 @@ export async function leadsRoutes(app: FastifyInstance) {
       include: { enriched: true, research: true, score: true, routing: true },
     });
     if (!lead) return reply.code(404).send({ error: "not found" });
-    const { enriched, research, score, routing, ...rest } = lead as never as Record<
-      string,
-      unknown
-    >;
-    return { lead: rest, enriched, research, score, routing };
+    const { enriched, research, score, routing, ...rest } = lead;
+    // At most one routing event per lead (re-routing replaces it). Kept as an
+    // array in the response so the API shape is unchanged.
+    return { lead: rest, enriched, research, score, routing: routing ? [routing] : [] };
   });
 }
